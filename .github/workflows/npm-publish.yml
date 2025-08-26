@@ -45,7 +45,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
 
       - name: Determine version and validate
@@ -166,12 +166,23 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          # Clear npm cache to avoid potential corruption
+          npm cache clean --force
+          
+          # Try installing with different registry settings
+          npm ci --registry=https://registry.npmjs.org/ --timeout=300000 || {
+            echo "First attempt failed, trying with different settings..."
+            npm ci --registry=https://registry.npmjs.org/ --no-optional --timeout=300000 || {
+              echo "Second attempt failed, trying without cache..."
+              npm ci --registry=https://registry.npmjs.org/ --no-cache --timeout=300000
+            }
+          }
 
       - name: Build project
         run: npm run build
