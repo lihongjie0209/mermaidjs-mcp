@@ -8,8 +8,21 @@ const HTML = `<!DOCTYPE html>
   <head>
     <meta charset="utf-8" />
     <style>
-      html, body { margin: 0; padding: 0; }
-      #container { display: inline-block; }
+      html, body { 
+        margin: 0; 
+        padding: 0; 
+        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+      }
+      #container { 
+        display: inline-block; 
+      }
+      svg {
+        shape-rendering: geometricPrecision;
+        text-rendering: optimizeLegibility;
+      }
     </style>
   </head>
   <body>
@@ -149,7 +162,15 @@ export class MermaidRenderer {
       this.browser = await puppeteer.launch({
         executablePath,
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+        args: [
+          '--no-sandbox', 
+          '--disable-setuid-sandbox', 
+          '--disable-dev-shm-usage',
+          '--force-device-scale-factor=2',
+          '--enable-font-antialiasing',
+          '--disable-font-subpixel-positioning',
+          '--enable-lcd-text'
+        ]
       });
       
       // 启动自动关闭定时器
@@ -173,7 +194,7 @@ export class MermaidRenderer {
   }
 
   async render(opts: RenderOptions): Promise<RenderResult> {
-    const { code, format = 'png', background = 'white', scale = 1, quality = 90 } = opts;
+    const { code, format = 'png', background = 'white', scale = 2, quality = 90 } = opts;
     await this.init();
     if (!this.browser) throw new Error('Browser not initialized');
 
@@ -189,7 +210,19 @@ export class MermaidRenderer {
       const { width, height } = await page.evaluate(async (c: string, bg: string) => {
         const mermaid = (window as any).mermaid;
         if (!mermaid) throw new Error('Mermaid failed to load');
-        mermaid.initialize({ startOnLoad: false, securityLevel: 'loose' });
+        
+        // 优化 Mermaid 配置以获得更清晰的渲染
+        mermaid.initialize({ 
+          startOnLoad: false, 
+          securityLevel: 'loose',
+          theme: 'default',
+          fontFamily: '"Segoe UI", "Helvetica Neue", Arial, sans-serif',
+          fontSize: 16,
+          curve: 'basis',
+          useMaxWidth: false,
+          htmlLabels: true
+        });
+        
         const id = 'm' + Math.random().toString(36).slice(2);
         const { svg } = await mermaid.render(id, c);
         const container = document.getElementById('container')!;
@@ -198,9 +231,14 @@ export class MermaidRenderer {
         }
         container.innerHTML = svg;
         const svgEl = container.querySelector('svg')! as SVGSVGElement;
+        
+        // 确保 SVG 使用最佳渲染设置
+        svgEl.style.shapeRendering = 'geometricPrecision';
+        svgEl.style.textRendering = 'optimizeLegibility';
+        
         const bbox = svgEl.getBBox();
-        const width = Math.ceil(bbox.x + bbox.width + 2);
-        const height = Math.ceil(bbox.y + bbox.height + 2);
+        const width = Math.ceil(bbox.x + bbox.width + 4); // 增加边距
+        const height = Math.ceil(bbox.y + bbox.height + 4);
         svgEl.setAttribute('width', String(width));
         svgEl.setAttribute('height', String(height));
         (document.body as any).style.width = width + 'px';

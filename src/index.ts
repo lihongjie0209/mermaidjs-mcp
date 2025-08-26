@@ -78,7 +78,7 @@ const tools = {
           type: 'number', 
           minimum: 1, 
           maximum: 4,
-          default: 1,
+          default: 2,
           description: 'Device scale factor for high-DPI rendering (1-4)'
         },
         quality: { 
@@ -99,7 +99,7 @@ const tools = {
 
 async function invokeRender(args: any) {
   try {
-    const { code, format = 'png', background = 'white', scale = 1, quality = 90, savePath } = args as {
+    const { code, format = 'png', background = 'white', scale = 2, quality = 90, savePath } = args as {
       code: string; format?: RenderFormat; background?: string; scale?: number; quality?: number; savePath?: string;
     };
 
@@ -139,7 +139,7 @@ async function invokeRender(args: any) {
 const server = new Server(
   {
     name: "@mermaidjs-mcp/mermaidjs-mcp",
-    version: "0.1.4",
+    version: "0.1.5",
     description: "MCP server that renders Mermaid diagrams to PNG/JPG/Base64 using a headless browser. Supports all Mermaid diagram types."
   },
   {

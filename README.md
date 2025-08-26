@@ -127,7 +127,7 @@ Input schema:
 - **code**: string (required) - Mermaid diagram code. Examples: `"graph TD; A-->B"`, `"sequenceDiagram; Alice->>Bob: Hello"`
 - **format**: 'png' | 'jpg' | 'jpeg' | 'base64' (default 'png') - Output format for the rendered diagram
 - **background**: CSS color or 'transparent' (default 'white') - Background color (CSS color name, hex, or 'transparent')
-- **scale**: number 1-4 (default 1) - Device scale factor for high-DPI rendering
+- **scale**: number 1-4 (default 2) - Device scale factor for high-DPI rendering
 - **quality**: number 0-100 (default 90) - JPEG quality (only for jpeg format)
 - **savePath**: string (optional) - Absolute path to save the rendered image file
 
