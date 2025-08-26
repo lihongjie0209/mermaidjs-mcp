@@ -4,10 +4,16 @@ Node-based MCP server that renders MermaidJS diagrams to PNG/JPG/Base64 using a 
 
 ## Features
 
-- Render Mermaid to PNG, JPG/JPEG, or Base64
-- High-DPI scaling via deviceScaleFactor
-- Optional file saving via `savePath`
-- Simple MCP tool: `render`
+- **All Mermaid Diagram Types**: Supports flowcharts, sequence diagrams, class diagrams, state diagrams, and more
+- **Multiple Output Formats**: PNG, JPG/JPEG, and Base64 encoding
+- **Headless Browser Rendering**: Uses Puppeteer for high-quality, consistent output
+- **Cross-platform**: Works on Windows, macOS, and Linux
+- **Local Dependencies**: No CDN dependencies, works offline
+- **High-DPI Support**: Configurable scale factor for crisp images
+- **Browser Instance Reuse**: Efficient browser management with configurable auto-close timeout (default 10 minutes)
+- **Customizable Background**: Transparent or any CSS color
+- **Command Line Options**: Configurable browser timeout and other settings
+- **MCP Tool**: `mermaid-render` with comprehensive input validation
 
 ## Install
 
@@ -54,6 +60,34 @@ Add this server to your GitHub Copilot settings. Create or edit your MCP configu
 }
 ```
 
+**With custom browser auto-close timeout (5 minutes):**
+
+```json
+{
+  "mcpServers": {
+    "mermaidjs-mcp": {
+      "command": "mermaidjs-mcp",
+      "args": ["--auto-close-timeout", "300"],
+      "env": {}
+    }
+  }
+}
+```
+
+**Disable auto-close (browser stays open):**
+
+```json
+{
+  "mcpServers": {
+    "mermaidjs-mcp": {
+      "command": "mermaidjs-mcp",
+      "args": ["--auto-close-timeout", "0"],
+      "env": {}
+    }
+  }
+}
+```
+
 **If using local installation:**
 
 ```json
@@ -86,18 +120,36 @@ After configuration, restart GitHub Copilot to load the server.
 
 ### Tool Usage
 
-Tool: `render`
+Tool: `mermaid-render`
 
 Input schema:
 
-- code: string (required)
-- format: 'png' | 'jpg' | 'jpeg' | 'base64' (default 'png')
-- background: CSS color or 'transparent' (default 'transparent')
-- scale: number device scale factor (default 1)
-- quality: JPEG quality 0-100 (default 90)
-- savePath: optional absolute path to write file (not used for base64)
+- **code**: string (required) - Mermaid diagram code. Examples: `"graph TD; A-->B"`, `"sequenceDiagram; Alice->>Bob: Hello"`
+- **format**: 'png' | 'jpg' | 'jpeg' | 'base64' (default 'png') - Output format for the rendered diagram
+- **background**: CSS color or 'transparent' (default 'transparent') - Background color (CSS color name, hex, or 'transparent')
+- **scale**: number 1-4 (default 1) - Device scale factor for high-DPI rendering
+- **quality**: number 0-100 (default 90) - JPEG quality (only for jpeg format)
+- **savePath**: string (optional) - Absolute path to save the rendered image file
 
-Output: image content result or a text message when saved to disk.
+Output: Image content result or a text message when saved to disk.
+
+### Command Line Options
+
+```bash
+# Show help
+mermaidjs-mcp --help
+
+# Use default 10-minute browser auto-close timeout
+mermaidjs-mcp
+
+# Auto-close browser after 5 minutes of inactivity
+mermaidjs-mcp --auto-close-timeout 300
+
+# Disable auto-close (browser stays open until server stops)
+mermaidjs-mcp -t 0
+```
+
+**Performance Note**: The browser instance is reused across multiple render requests to improve performance. It automatically closes after the specified timeout period (default 10 minutes) when inactive.
 
 ## Demo
 

@@ -4,12 +4,50 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema, McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { MermaidRenderer, type RenderFormat } from './renderer.js';
 
+// 解析命令行参数
+function parseArgs() {
+  const args = process.argv.slice(2);
+  let autoCloseTimeout = 10 * 60 * 1000; // 默认10分钟
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--auto-close-timeout' || arg === '-t') {
+      const nextArg = args[i + 1];
+      if (nextArg && !isNaN(Number(nextArg))) {
+        autoCloseTimeout = Number(nextArg) * 1000; // 转换为毫秒
+        i++; // 跳过下一个参数，因为它是超时值
+      }
+    } else if (arg === '--help' || arg === '-h') {
+      console.log(`
+Mermaid MCP Server - Render Mermaid diagrams to images
+
+Usage: mermaidjs-mcp [options]
+
+Options:
+  -t, --auto-close-timeout <seconds>  Auto-close browser after inactivity (default: 600 seconds / 10 minutes)
+                                      Set to 0 to disable auto-close
+  -h, --help                          Show this help message
+
+Examples:
+  mermaidjs-mcp                       # Use default 10-minute timeout
+  mermaidjs-mcp -t 300               # Auto-close after 5 minutes
+  mermaidjs-mcp --auto-close-timeout 0  # Never auto-close browser
+`);
+      process.exit(0);
+    }
+  }
+
+  return { autoCloseTimeout };
+}
+
+const { autoCloseTimeout } = parseArgs();
+
 // 延迟初始化 renderer，避免启动时出错
 let renderer: MermaidRenderer | null = null;
 
 function getRenderer(): MermaidRenderer {
   if (!renderer) {
-    renderer = new MermaidRenderer();
+    renderer = new MermaidRenderer(autoCloseTimeout);
   }
   return renderer;
 }

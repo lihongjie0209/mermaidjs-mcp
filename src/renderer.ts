@@ -108,9 +108,36 @@ declare global {
 
 export class MermaidRenderer {
   private browser: Browser | null = null;
+  private autoCloseTimer: NodeJS.Timeout | null = null;
+  private autoCloseTimeout: number;
+
+  constructor(autoCloseTimeout: number = 10 * 60 * 1000) { // 默认10分钟
+    this.autoCloseTimeout = autoCloseTimeout;
+  }
+
+  private resetAutoCloseTimer() {
+    // 清除现有定时器
+    if (this.autoCloseTimer) {
+      clearTimeout(this.autoCloseTimer);
+    }
+    
+    // 设置新的自动关闭定时器
+    if (this.autoCloseTimeout > 0) {
+      this.autoCloseTimer = setTimeout(async () => {
+        if (this.browser) {
+          console.log('Auto-closing browser after inactivity period');
+          await this.close();
+        }
+      }, this.autoCloseTimeout);
+    }
+  }
 
   async init() {
-    if (this.browser) return;
+    if (this.browser) {
+      // 重置定时器，因为浏览器正在被使用
+      this.resetAutoCloseTimer();
+      return;
+    }
     
     try {
       const executablePath = findBrowserExecutable();
@@ -124,12 +151,21 @@ export class MermaidRenderer {
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
       });
+      
+      // 启动自动关闭定时器
+      this.resetAutoCloseTimer();
     } catch (error) {
       throw new Error(`Failed to launch browser: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   async close() {
+    // 清除自动关闭定时器
+    if (this.autoCloseTimer) {
+      clearTimeout(this.autoCloseTimer);
+      this.autoCloseTimer = null;
+    }
+    
     if (this.browser) {
       await this.browser.close();
       this.browser = null;
@@ -142,52 +178,58 @@ export class MermaidRenderer {
     if (!this.browser) throw new Error('Browser not initialized');
 
     const page = await this.browser.newPage();
-    await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: Math.max(1, scale) });
-    await page.setContent(HTML, { waitUntil: 'domcontentloaded' });
+    try {
+      await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: Math.max(1, scale) });
+      await page.setContent(HTML, { waitUntil: 'domcontentloaded' });
 
-    // Load local UMD build of mermaid into the page (no CDN)
-    const mermaidPath = require.resolve('mermaid/dist/mermaid.min.js');
-    await page.addScriptTag({ path: mermaidPath });
+      // Load local UMD build of mermaid into the page (no CDN)
+      const mermaidPath = require.resolve('mermaid/dist/mermaid.min.js');
+      await page.addScriptTag({ path: mermaidPath });
 
-    const { width, height } = await page.evaluate(async (c: string, bg: string) => {
-      const mermaid = (window as any).mermaid;
-      if (!mermaid) throw new Error('Mermaid failed to load');
-      mermaid.initialize({ startOnLoad: false, securityLevel: 'loose' });
-      const id = 'm' + Math.random().toString(36).slice(2);
-      const { svg } = await mermaid.render(id, c);
-      const container = document.getElementById('container')!;
-      if (bg && bg !== 'transparent') {
-        (document.body as any).style.background = bg;
+      const { width, height } = await page.evaluate(async (c: string, bg: string) => {
+        const mermaid = (window as any).mermaid;
+        if (!mermaid) throw new Error('Mermaid failed to load');
+        mermaid.initialize({ startOnLoad: false, securityLevel: 'loose' });
+        const id = 'm' + Math.random().toString(36).slice(2);
+        const { svg } = await mermaid.render(id, c);
+        const container = document.getElementById('container')!;
+        if (bg && bg !== 'transparent') {
+          (document.body as any).style.background = bg;
+        }
+        container.innerHTML = svg;
+        const svgEl = container.querySelector('svg')! as SVGSVGElement;
+        const bbox = svgEl.getBBox();
+        const width = Math.ceil(bbox.x + bbox.width + 2);
+        const height = Math.ceil(bbox.y + bbox.height + 2);
+        svgEl.setAttribute('width', String(width));
+        svgEl.setAttribute('height', String(height));
+        (document.body as any).style.width = width + 'px';
+        (document.body as any).style.height = height + 'px';
+        return { width, height };
+      }, code, background);
+      
+      await page.setViewport({ width, height, deviceScaleFactor: Math.max(1, scale) });
+      const clip = { x: 0, y: 0, width, height } as const;
+      const type = format === 'jpg' || format === 'jpeg' ? 'jpeg' : 'png';
+      const shot = await page.screenshot({
+        type,
+        omitBackground: background === 'transparent',
+        quality: type === 'jpeg' ? quality : undefined,
+        clip
+      });
+
+      const buffer: Buffer = Buffer.isBuffer(shot)
+        ? (shot as Buffer)
+        : Buffer.from(shot as Uint8Array);
+
+      if (format === 'base64') {
+        return { data: buffer.toString('base64'), width, height, contentType: 'image/png' };
       }
-      container.innerHTML = svg;
-      const svgEl = container.querySelector('svg')! as SVGSVGElement;
-      const bbox = svgEl.getBBox();
-      const width = Math.ceil(bbox.x + bbox.width + 2);
-      const height = Math.ceil(bbox.y + bbox.height + 2);
-      svgEl.setAttribute('width', String(width));
-      svgEl.setAttribute('height', String(height));
-      (document.body as any).style.width = width + 'px';
-      (document.body as any).style.height = height + 'px';
-      return { width, height };
-    }, code, background);
-    await page.setViewport({ width, height, deviceScaleFactor: Math.max(1, scale) });
-    const clip = { x: 0, y: 0, width, height } as const;
-    const type = format === 'jpg' || format === 'jpeg' ? 'jpeg' : 'png';
-    const shot = await page.screenshot({
-      type,
-      omitBackground: background === 'transparent',
-      quality: type === 'jpeg' ? quality : undefined,
-      clip
-    });
-    await page.close();
-
-    const buffer: Buffer = Buffer.isBuffer(shot)
-      ? (shot as Buffer)
-      : Buffer.from(shot as Uint8Array);
-
-    if (format === 'base64') {
-      return { data: buffer.toString('base64'), width, height, contentType: 'image/png' };
+      return { data: buffer, width, height, contentType: type === 'jpeg' ? 'image/jpeg' : 'image/png' };
+    } finally {
+      await page.close();
+      // 重置自动关闭定时器，因为浏览器刚被使用
+      this.resetAutoCloseTimer();
     }
-    return { data: buffer, width, height, contentType: type === 'jpeg' ? 'image/jpeg' : 'image/png' };
   }
 }

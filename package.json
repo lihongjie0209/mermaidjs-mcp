@@ -14,6 +14,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
+    "start:no-timeout": "node dist/index.js --auto-close-timeout 0",
+    "start:5min": "node dist/index.js --auto-close-timeout 300",
     "dev": "tsx watch src/index.ts",
     "demo": "tsx scripts/demo.ts",
     "check": "tsc --noEmit",
