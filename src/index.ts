@@ -71,7 +71,7 @@ const tools = {
         },
         background: { 
           type: 'string', 
-          default: 'transparent',
+          default: 'white',
           description: "Background color (CSS color name, hex, or 'transparent')"
         },
         scale: { 
@@ -99,7 +99,7 @@ const tools = {
 
 async function invokeRender(args: any) {
   try {
-    const { code, format = 'png', background = 'transparent', scale = 1, quality = 90, savePath } = args as {
+    const { code, format = 'png', background = 'white', scale = 1, quality = 90, savePath } = args as {
       code: string; format?: RenderFormat; background?: string; scale?: number; quality?: number; savePath?: string;
     };
 
@@ -139,7 +139,7 @@ async function invokeRender(args: any) {
 const server = new Server(
   {
     name: "@mermaidjs-mcp/mermaidjs-mcp",
-    version: "0.1.2",
+    version: "0.1.4",
     description: "MCP server that renders Mermaid diagrams to PNG/JPG/Base64 using a headless browser. Supports all Mermaid diagram types."
   },
   {

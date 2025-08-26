@@ -173,7 +173,7 @@ export class MermaidRenderer {
   }
 
   async render(opts: RenderOptions): Promise<RenderResult> {
-    const { code, format = 'png', background = 'transparent', scale = 1, quality = 90 } = opts;
+    const { code, format = 'png', background = 'white', scale = 1, quality = 90 } = opts;
     await this.init();
     if (!this.browser) throw new Error('Browser not initialized');
 

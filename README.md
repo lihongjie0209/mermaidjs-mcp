@@ -11,7 +11,7 @@ Node-based MCP server that renders MermaidJS diagrams to PNG/JPG/Base64 using a 
 - **Local Dependencies**: No CDN dependencies, works offline
 - **High-DPI Support**: Configurable scale factor for crisp images
 - **Browser Instance Reuse**: Efficient browser management with configurable auto-close timeout (default 10 minutes)
-- **Customizable Background**: Transparent or any CSS color
+- **Customizable Background**: White (default), transparent, or any CSS color
 - **Command Line Options**: Configurable browser timeout and other settings
 - **MCP Tool**: `mermaid-render` with comprehensive input validation
 
@@ -126,7 +126,7 @@ Input schema:
 
 - **code**: string (required) - Mermaid diagram code. Examples: `"graph TD; A-->B"`, `"sequenceDiagram; Alice->>Bob: Hello"`
 - **format**: 'png' | 'jpg' | 'jpeg' | 'base64' (default 'png') - Output format for the rendered diagram
-- **background**: CSS color or 'transparent' (default 'transparent') - Background color (CSS color name, hex, or 'transparent')
+- **background**: CSS color or 'transparent' (default 'white') - Background color (CSS color name, hex, or 'transparent')
 - **scale**: number 1-4 (default 1) - Device scale factor for high-DPI rendering
 - **quality**: number 0-100 (default 90) - JPEG quality (only for jpeg format)
 - **savePath**: string (optional) - Absolute path to save the rendered image file
