@@ -1,0 +1,44 @@
+{
+  "name": "@mermaidjs-mcp/mermaidjs-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that renders Mermaid diagrams to PNG/JPG/Base64 using a headless browser",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "mermaidjs-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "demo": "tsx scripts/demo.ts",
+    "lint": "echo 'No linter configured'"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mermaid",
+    "puppeteer",
+    "render",
+    "png",
+    "jpg",
+    "jpeg",
+    "base64"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.5.0",
+    "mermaid": "^10.9.2",
+    "puppeteer": "^23.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.9",
+    "tsx": "^4.17.0",
+    "typescript": "^5.5.4"
+  }
+}
