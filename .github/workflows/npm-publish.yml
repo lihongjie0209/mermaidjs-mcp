@@ -168,8 +168,16 @@ jobs:
 
       - name: Update package.json version
         run: |
-          npm version ${{ needs.validate.outputs.version }} --no-git-tag-version
-          echo "📝 Updated package.json to version ${{ needs.validate.outputs.version }}"
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          TARGET_VERSION="${{ needs.validate.outputs.version }}"
+          
+          if [ "$CURRENT_VERSION" = "$TARGET_VERSION" ]; then
+            echo "✅ Version already correct: $CURRENT_VERSION"
+          else
+            echo "📝 Updating version from $CURRENT_VERSION to $TARGET_VERSION"
+            npm version $TARGET_VERSION --no-git-tag-version
+            echo "✅ Updated package.json to version $TARGET_VERSION"
+          fi
 
       - name: Dry run publish
         run: |
