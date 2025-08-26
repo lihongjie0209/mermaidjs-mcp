@@ -179,6 +179,45 @@ flowchart TD
 
 The server will return the rendered image that Copilot can display or save.
 
+## Common Diagram Types & Examples
+
+### GitGraph
+```
+gitGraph
+    commit id: "Initial commit"
+    branch develop
+    checkout develop
+    commit id: "Add feature A"
+    commit id: "Add feature B"
+    checkout main
+    merge develop
+    commit id: "Release v1.0"
+```
+**Note:** Use `gitGraph` (not `gitgraph`) for correct syntax.
+
+### Flowchart
+```
+flowchart TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Process]
+    B -->|No| D[End]
+    C --> D
+```
+
+### Sequence Diagram
+```
+sequenceDiagram
+    Alice->>Bob: Hello Bob!
+    Bob-->>Alice: Hello Alice!
+```
+
+## Error Handling
+
+The server provides helpful error messages with syntax suggestions:
+- Detects common misspellings (`gitgraph` → `gitGraph`, `flowchar` → `flowchart`)
+- Lists available diagram types when unknown types are used
+- Provides working examples for common syntax errors
+
 ## Notes
 
 - For transparent backgrounds in PNG, keep `background` as `transparent`.

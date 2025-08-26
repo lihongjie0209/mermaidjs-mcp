@@ -97,12 +97,66 @@ const tools = {
   }
 } as const;
 
-async function invokeRender(args: any) {
-  try {
-    const { code, format = 'png', background = 'white', scale = 2, quality = 90, savePath } = args as {
-      code: string; format?: RenderFormat; background?: string; scale?: number; quality?: number; savePath?: string;
-    };
+// 常见的图表类型错误和修正建议
+const DIAGRAM_FIXES = {
+  'gitgraph': 'gitGraph',
+  'git graph': 'gitGraph',
+  'flowchar': 'flowchart',
+  'sequence': 'sequenceDiagram',
+  'classdiagram': 'classDiagram',
+  'class': 'classDiagram',
+  'statediagram': 'stateDiagram',
+  'state': 'stateDiagram',
+  'userjourney': 'journey',
+  'user journey': 'journey',
+  'pie chart': 'pie',
+  'gantt chart': 'gantt',
+  'mindmap': 'mindmap',
+  'timeline': 'timeline'
+};
 
+function enhanceErrorMessage(error: Error, code: string): string {
+  const errorMessage = error.message;
+  
+  // 检查是否是图表类型检测错误
+  if (errorMessage.includes('No diagram type detected') || errorMessage.includes('UnknownDiagramError')) {
+    const firstLine = code.trim().split('\n')[0].toLowerCase();
+    
+    // 检查常见的拼写错误
+    for (const [wrong, correct] of Object.entries(DIAGRAM_FIXES)) {
+      if (firstLine.includes(wrong)) {
+        return `${errorMessage}\n\n💡 Suggestion: Did you mean '${correct}' instead of '${wrong}'?\n\nExample:\n${correct}\n    [rest of your diagram]`;
+      }
+    }
+    
+    return `${errorMessage}\n\n💡 Common diagram types:\n` +
+           `• flowchart TD/LR - Flow diagrams\n` +
+           `• sequenceDiagram - Sequence diagrams\n` +
+           `• classDiagram - Class diagrams\n` +
+           `• stateDiagram - State diagrams\n` +
+           `• gitGraph - Git graphs\n` +
+           `• gantt - Gantt charts\n` +
+           `• pie - Pie charts\n` +
+           `• journey - User journey maps\n\n` +
+           `Make sure your diagram starts with one of these keywords.`;
+  }
+  
+  // 检查是否是语法解析错误
+  if (errorMessage.includes('Parse error') || errorMessage.includes('parseError')) {
+    if (code.toLowerCase().startsWith('gitgraph')) {
+      return `${errorMessage}\n\n💡 GitGraph syntax tip:\nUse 'gitGraph' (not 'gitgraph') and avoid complex options.\n\nWorking example:\ngitGraph\n    commit id: "Initial commit"\n    branch develop\n    checkout develop\n    commit id: "Add feature"\n    checkout main\n    merge develop`;
+    }
+  }
+  
+  return errorMessage;
+}
+
+async function invokeRender(args: any) {
+  const { code, format = 'png', background = 'white', scale = 2, quality = 90, savePath } = args as {
+    code: string; format?: RenderFormat; background?: string; scale?: number; quality?: number; savePath?: string;
+  };
+
+  try {
     if (!code) {
       throw new McpError(ErrorCode.InvalidParams, 'Missing required parameter: code');
     }
@@ -132,14 +186,17 @@ async function invokeRender(args: any) {
     if (error instanceof McpError) {
       throw error;
     }
-    throw new McpError(ErrorCode.InternalError, error instanceof Error ? error.message : String(error));
+    
+    // 增强错误消息，提供有用的建议
+    const enhancedMessage = enhanceErrorMessage(error as Error, code || '');
+    throw new McpError(ErrorCode.InternalError, enhancedMessage);
   }
 }
 
 const server = new Server(
   {
     name: "@mermaidjs-mcp/mermaidjs-mcp",
-    version: "0.1.5",
+    version: "0.1.6",
     description: "MCP server that renders Mermaid diagrams to PNG/JPG/Base64 using a headless browser. Supports all Mermaid diagram types."
   },
   {

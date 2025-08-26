@@ -1,6 +1,6 @@
 {
   "name": "@mermaidjs-mcp/mermaidjs-mcp",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "MCP server that renders Mermaid diagrams to PNG/JPG/Base64 using a headless browser",
   "type": "module",
   "main": "dist/index.js",
