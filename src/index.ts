@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { RequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { z } from 'zod';
+import { CallToolRequestSchema, ListToolsRequestSchema, McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { MermaidRenderer, type RenderFormat } from './renderer.js';
 
 // 延迟初始化 renderer，避免启动时出错
@@ -15,27 +14,60 @@ function getRenderer(): MermaidRenderer {
   return renderer;
 }
 
-const renderTool = {
-  name: 'render',
-  description: 'Render Mermaid diagram to PNG/JPG/Base64 using a headless browser',
-  inputSchema: {
-    type: 'object',
-    required: ['code'],
-    properties: {
-      code: { type: 'string', description: 'Mermaid code' },
-      format: { type: 'string', enum: ['png', 'jpg', 'jpeg', 'base64'], default: 'png' },
-      background: { type: 'string', description: "Background color or 'transparent'", default: 'transparent' },
-      scale: { type: 'number', description: 'Device scale factor for high-DPI rendering (1..4)', default: 1 },
-      quality: { type: 'number', description: 'JPEG quality 0-100 (jpeg only)', default: 90 },
-      savePath: { type: 'string', description: 'Optional absolute path to save the image' }
+const tools = {
+  "mermaid-render": {
+    description: "Render Mermaid diagram to PNG/JPG/Base64 using a headless browser. Supports all Mermaid diagram types including flowcharts, sequence diagrams, class diagrams, etc.",
+    inputSchema: {
+      type: 'object',
+      required: ['code'],
+      properties: {
+        code: { 
+          type: 'string', 
+          description: 'Mermaid diagram code. Examples: "graph TD; A-->B", "sequenceDiagram; Alice->>Bob: Hello"' 
+        },
+        format: { 
+          type: 'string', 
+          enum: ['png', 'jpg', 'jpeg', 'base64'], 
+          default: 'png',
+          description: 'Output format for the rendered diagram'
+        },
+        background: { 
+          type: 'string', 
+          default: 'transparent',
+          description: "Background color (CSS color name, hex, or 'transparent')"
+        },
+        scale: { 
+          type: 'number', 
+          minimum: 1, 
+          maximum: 4,
+          default: 1,
+          description: 'Device scale factor for high-DPI rendering (1-4)'
+        },
+        quality: { 
+          type: 'number', 
+          minimum: 0,
+          maximum: 100,
+          default: 90,
+          description: 'JPEG quality 0-100 (only for jpeg format)'
+        },
+        savePath: { 
+          type: 'string', 
+          description: 'Optional absolute path to save the rendered image file'
+        }
+      }
     }
   }
 } as const;
 
-async function invokeRender(input: any) {
-    const { code, format = 'png', background = 'transparent', scale = 1, quality = 90, savePath } = input as {
+async function invokeRender(args: any) {
+  try {
+    const { code, format = 'png', background = 'transparent', scale = 1, quality = 90, savePath } = args as {
       code: string; format?: RenderFormat; background?: string; scale?: number; quality?: number; savePath?: string;
     };
+
+    if (!code) {
+      throw new McpError(ErrorCode.InvalidParams, 'Missing required parameter: code');
+    }
 
     const rendererInstance = getRenderer();
     const result = await rendererInstance.render({ code, format, background: background as any, scale, quality });
@@ -58,49 +90,59 @@ async function invokeRender(input: any) {
         { type: 'image', data: body, mimeType: mime }
       ]
     };
+  } catch (error) {
+    if (error instanceof McpError) {
+      throw error;
+    }
+    throw new McpError(ErrorCode.InternalError, error instanceof Error ? error.message : String(error));
+  }
 }
 
-async function main() {
+const server = new Server(
+  {
+    name: "@mermaidjs-mcp/mermaidjs-mcp",
+    version: "0.1.1",
+    description: "MCP server that renders Mermaid diagrams to PNG/JPG/Base64 using a headless browser. Supports all Mermaid diagram types."
+  },
+  {
+    capabilities: { 
+      tools: {}
+    }
+  }
+);
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: Object.entries(tools).map(([name, tool]) => ({ 
+    name, 
+    description: tool.description, 
+    inputSchema: tool.inputSchema as any 
+  }))
+}));
+
+server.setRequestHandler(CallToolRequestSchema, async (req) => {
+  const { name, arguments: args } = req.params;
   try {
-    const server = new Server({
-      name: '@mermaidjs-mcp/mermaidjs-mcp',
-      version: '0.1.1',
-    }, {
-      capabilities: {
-        tools: {}
+    switch (name) {
+      case "mermaid-render": {
+        return await invokeRender(args);
       }
-    });
+      default:
+        throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
+    }
+  } catch (err: any) {
+    if (err instanceof McpError) {
+      throw err;
+    }
+    throw new McpError(ErrorCode.InternalError, err?.message ?? String(err));
+  }
+});
 
-    // Define MCP request schemas and register handlers using the SDK
-    const ListToolsRequestSchema = RequestSchema.extend({
-      method: z.literal('tools/list'),
-      // Accept any params shape; tools/list typically has no params
-      params: z.any().optional(),
-    });
-
-    const CallToolRequestSchema = RequestSchema.extend({
-      method: z.literal('tools/call'),
-      params: z.object({
-        name: z.string(),
-        arguments: z.record(z.any()).optional(),
-      }),
-    });
-
-    server.setRequestHandler(ListToolsRequestSchema, async (_req) => ({
-      tools: [renderTool]
-    }));
-
-    server.setRequestHandler(CallToolRequestSchema, async (req) => {
-      const { name, arguments: args } = req.params as { name: string; arguments?: any };
-      if (name !== 'render') {
-        throw new Error(`Unknown tool: ${name}`);
-      }
-      return await invokeRender(args ?? {});
-    });
-
-    const transport = new StdioServerTransport();
+// Start stdio transport for MCP
+const transport = new StdioServerTransport();
+(async () => {
+  try {
     await server.connect(transport);
-
+    
     // Graceful shutdown
     const shutdown = async () => {
       if (renderer) {
@@ -114,12 +156,4 @@ async function main() {
     console.error('Failed to start MCP server:', error);
     process.exit(1);
   }
-}
-
-// Only run when executed directly
-if (import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}`) {
-  main().catch((err) => {
-    console.error(err);
-    process.exit(1);
-  });
-}
+})();
