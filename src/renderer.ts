@@ -111,12 +111,22 @@ export class MermaidRenderer {
 
   async init() {
     if (this.browser) return;
-    const executablePath = findBrowserExecutable();
-    this.browser = await puppeteer.launch({
-      executablePath,
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+    
+    try {
+      const executablePath = findBrowserExecutable();
+      
+      if (!executablePath) {
+        throw new Error('No browser executable found. Please install Chrome, Edge, or set PUPPETEER_EXECUTABLE_PATH environment variable.');
+      }
+      
+      this.browser = await puppeteer.launch({
+        executablePath,
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      });
+    } catch (error) {
+      throw new Error(`Failed to launch browser: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   async close() {

@@ -5,7 +5,15 @@ import { RequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { MermaidRenderer, type RenderFormat } from './renderer.js';
 
-const renderer = new MermaidRenderer();
+// 延迟初始化 renderer，避免启动时出错
+let renderer: MermaidRenderer | null = null;
+
+function getRenderer(): MermaidRenderer {
+  if (!renderer) {
+    renderer = new MermaidRenderer();
+  }
+  return renderer;
+}
 
 const renderTool = {
   name: 'render',
@@ -29,7 +37,8 @@ async function invokeRender(input: any) {
       code: string; format?: RenderFormat; background?: string; scale?: number; quality?: number; savePath?: string;
     };
 
-    const result = await renderer.render({ code, format, background: background as any, scale, quality });
+    const rendererInstance = getRenderer();
+    const result = await rendererInstance.render({ code, format, background: background as any, scale, quality });
 
     if (savePath && format !== 'base64') {
       const fs = await import('node:fs/promises');
@@ -52,52 +61,59 @@ async function invokeRender(input: any) {
 }
 
 async function main() {
-  const server = new Server({
-    name: '@mermaidjs-mcp/mermaidjs-mcp',
-    version: '0.1.0',
-  }, {
-    capabilities: {
-      tools: {}
-    }
-  });
+  try {
+    const server = new Server({
+      name: '@mermaidjs-mcp/mermaidjs-mcp',
+      version: '0.1.0',
+    }, {
+      capabilities: {
+        tools: {}
+      }
+    });
 
-  // Define MCP request schemas and register handlers using the SDK
-  const ListToolsRequestSchema = RequestSchema.extend({
-    method: z.literal('tools/list'),
-    // Accept any params shape; tools/list typically has no params
-    params: z.any().optional(),
-  });
+    // Define MCP request schemas and register handlers using the SDK
+    const ListToolsRequestSchema = RequestSchema.extend({
+      method: z.literal('tools/list'),
+      // Accept any params shape; tools/list typically has no params
+      params: z.any().optional(),
+    });
 
-  const CallToolRequestSchema = RequestSchema.extend({
-    method: z.literal('tools/call'),
-    params: z.object({
-      name: z.string(),
-      arguments: z.record(z.any()).optional(),
-    }),
-  });
+    const CallToolRequestSchema = RequestSchema.extend({
+      method: z.literal('tools/call'),
+      params: z.object({
+        name: z.string(),
+        arguments: z.record(z.any()).optional(),
+      }),
+    });
 
-  server.setRequestHandler(ListToolsRequestSchema, async (_req) => ({
-    tools: [renderTool]
-  }));
+    server.setRequestHandler(ListToolsRequestSchema, async (_req) => ({
+      tools: [renderTool]
+    }));
 
-  server.setRequestHandler(CallToolRequestSchema, async (req) => {
-    const { name, arguments: args } = req.params as { name: string; arguments?: any };
-    if (name !== 'render') {
-      throw new Error(`Unknown tool: ${name}`);
-    }
-    return await invokeRender(args ?? {});
-  });
+    server.setRequestHandler(CallToolRequestSchema, async (req) => {
+      const { name, arguments: args } = req.params as { name: string; arguments?: any };
+      if (name !== 'render') {
+        throw new Error(`Unknown tool: ${name}`);
+      }
+      return await invokeRender(args ?? {});
+    });
 
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
 
-  // Graceful shutdown
-  const shutdown = async () => {
-    await renderer.close();
-    process.exit(0);
-  };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+    // Graceful shutdown
+    const shutdown = async () => {
+      if (renderer) {
+        await renderer.close();
+      }
+      process.exit(0);
+    };
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+  } catch (error) {
+    console.error('Failed to start MCP server:', error);
+    process.exit(1);
+  }
 }
 
 // Only run when executed directly
