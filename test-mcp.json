@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"mermaid-render","arguments":{"code":"graph TD; A[Start] --> B[Process] --> C[End]","format":"base64"}}}

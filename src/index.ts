@@ -101,7 +101,7 @@ async function invokeRender(args: any) {
 const server = new Server(
   {
     name: "@mermaidjs-mcp/mermaidjs-mcp",
-    version: "0.1.1",
+    version: "0.1.2",
     description: "MCP server that renders Mermaid diagrams to PNG/JPG/Base64 using a headless browser. Supports all Mermaid diagram types."
   },
   {
