@@ -1,0 +1,246 @@
+name: NPM Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 1.0.0)'
+        required: true
+        type: string
+      create_tag:
+        description: 'Create git tag for this version'
+        required: false
+        default: true
+        type: boolean
+      prerelease:
+        description: 'Mark as prerelease'
+        required: false
+        default: false
+        type: boolean
+      force_publish:
+        description: 'Force publish even if version exists'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+      is_prerelease: ${{ steps.version.outputs.IS_PRERELEASE }}
+      should_publish: ${{ steps.check-version.outputs.SHOULD_PUBLISH }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Determine version and validate
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual trigger
+            VERSION="${{ github.event.inputs.version }}"
+            IS_PRERELEASE="${{ github.event.inputs.prerelease }}"
+            
+            # Validate manual version format
+            if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-.*)?$ ]]; then
+              echo "❌ Invalid version format. Expected: 1.0.0 or 1.0.0-beta.1"
+              exit 1
+            fi
+            
+            echo "📦 Manual publish requested for version: $VERSION"
+          else
+            # Tag trigger
+            if [[ ! "${{ github.ref_name }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-.*)?$ ]]; then
+              echo "❌ Invalid tag format. Expected: v1.0.0 or v1.0.0-beta.1"
+              exit 1
+            fi
+            
+            VERSION=${GITHUB_REF#refs/tags/v}
+            IS_PRERELEASE="${{ contains(github.ref_name, '-') }}"
+            
+            echo "📦 Tag-triggered publish for version: $VERSION"
+          fi
+          
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "IS_PRERELEASE=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          echo "✅ Version validation passed: $VERSION"
+
+      - name: Check if version exists on NPM
+        id: check-version
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          FORCE_PUBLISH="${{ github.event.inputs.force_publish }}"
+          
+          echo "🔍 Checking if version $VERSION exists on NPM..."
+          
+          if npm view @mermaidjs-mcp/mermaidjs-mcp@$VERSION version >/dev/null 2>&1; then
+            echo "📦 Version $VERSION already exists on NPM"
+            
+            if [ "$FORCE_PUBLISH" = "true" ]; then
+              echo "⚠️ Force publish enabled, will continue anyway"
+              echo "SHOULD_PUBLISH=true" >> $GITHUB_OUTPUT
+              echo "VERSION_EXISTS=true" >> $GITHUB_OUTPUT
+            else
+              echo "⏭️ Skipping publish as version already exists"
+              echo "SHOULD_PUBLISH=false" >> $GITHUB_OUTPUT
+              echo "VERSION_EXISTS=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "✅ Version $VERSION does not exist, will proceed with publish"
+            echo "SHOULD_PUBLISH=true" >> $GITHUB_OUTPUT
+            echo "VERSION_EXISTS=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create tag for manual publish
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.create_tag == 'true' && steps.check-version.outputs.SHOULD_PUBLISH == 'true'
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          if git tag -l "v${{ steps.version.outputs.VERSION }}" | grep -q "v${{ steps.version.outputs.VERSION }}"; then
+            echo "🏷️ Tag v${{ steps.version.outputs.VERSION }} already exists, skipping tag creation"
+          else
+            git tag v${{ steps.version.outputs.VERSION }}
+            git push origin v${{ steps.version.outputs.VERSION }}
+            echo "🏷️ Created and pushed tag v${{ steps.version.outputs.VERSION }}"
+          fi
+
+      - name: Install dependencies
+        if: steps.check-version.outputs.SHOULD_PUBLISH == 'true'
+        run: npm ci
+
+      - name: Lint and type check
+        if: steps.check-version.outputs.SHOULD_PUBLISH == 'true'
+        run: |
+          npm run check --if-present
+          echo "✅ Type checking passed"
+
+      - name: Build project
+        if: steps.check-version.outputs.SHOULD_PUBLISH == 'true'
+        run: |
+          npm run build
+          echo "✅ Build completed"
+
+      - name: Verify build artifacts
+        if: steps.check-version.outputs.SHOULD_PUBLISH == 'true'
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "❌ Build artifacts not found"
+            exit 1
+          fi
+          echo "✅ Build artifacts verified"
+
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    if: needs.validate.outputs.should_publish == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Update package.json version
+        run: |
+          npm version ${{ needs.validate.outputs.version }} --no-git-tag-version
+          echo "📝 Updated package.json to version ${{ needs.validate.outputs.version }}"
+
+      - name: Dry run publish
+        run: |
+          npm publish --dry-run --access public
+          echo "✅ Dry run successful"
+
+      - name: Publish to NPM
+        run: |
+          npm publish --access public
+          echo "🚀 Successfully published to NPM"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify NPM publish
+        run: |
+          sleep 30  # Wait for NPM to propagate
+          if npm view @mermaidjs-mcp/mermaidjs-mcp@${{ needs.validate.outputs.version }} version; then
+            echo "✅ Package verified on NPM"
+          else
+            echo "❌ Package verification failed"
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ needs.validate.outputs.version }}
+          release_name: Release v${{ needs.validate.outputs.version }}
+          body: |
+            ## 🎉 Version ${{ needs.validate.outputs.version }}
+            
+            ### 📦 NPM Package
+            - **Package**: `@mermaidjs-mcp/mermaidjs-mcp@${{ needs.validate.outputs.version }}`
+            - **NPM Link**: https://www.npmjs.com/package/@mermaidjs-mcp/mermaidjs-mcp/v/${{ needs.validate.outputs.version }}
+            
+            ### 📥 Installation
+            ```bash
+            # Install globally
+            npm install -g @mermaidjs-mcp/mermaidjs-mcp@${{ needs.validate.outputs.version }}
+            
+            # Or install in project
+            npm install @mermaidjs-mcp/mermaidjs-mcp@${{ needs.validate.outputs.version }}
+            ```
+            
+            ### 🔄 Upgrade
+            ```bash
+            npm update -g @mermaidjs-mcp/mermaidjs-mcp
+            ```
+            
+            ### 📋 What's New
+            ${{ github.event_name == 'workflow_dispatch' && 'Manual release triggered.' || 'See the commit history for detailed changes.' }}
+            
+            ### 🚀 Trigger
+            ${{ github.event_name == 'workflow_dispatch' && '**Manual Publish** 🖱️' || '**Tag Push** 🏷️' }}
+            
+            ---
+            
+            **Full Changelog**: https://github.com/${{ github.repository }}/commits/v${{ needs.validate.outputs.version }}
+          draft: false
+          prerelease: ${{ needs.validate.outputs.is_prerelease == 'true' }}
+
+  skip-publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    if: needs.validate.outputs.should_publish == 'false'
+    
+    steps:
+      - name: Skip publish notification
+        run: |
+          echo "⏭️ Skipping publish for version ${{ needs.validate.outputs.version }}"
+          echo "📦 Version already exists on NPM"
+          echo "💡 Use 'force_publish: true' to override this behavior"

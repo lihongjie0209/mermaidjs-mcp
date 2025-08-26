@@ -11,9 +11,19 @@ Node-based MCP server that renders MermaidJS diagrams to PNG/JPG/Base64 using a 
 
 ## Install
 
+### From npm (Recommended)
+
+```bash
+npm install -g @mermaidjs-mcp/mermaidjs-mcp
+```
+
+### From source
+
 ```powershell
-pnpm install
-pnpm build
+git clone https://github.com/lihongjie0209/mermaidjs-mcp.git
+cd mermaidjs-mcp
+npm install
+npm run build
 ```
 
 On first run, Puppeteer will download Chromium if needed.
@@ -30,6 +40,22 @@ Add this server to your GitHub Copilot settings. Create or edit your MCP configu
 **macOS**: `~/Library/Application Support/GitHub Copilot/mcp_config.json`  
 **Linux**: `~/.config/GitHub Copilot/mcp_config.json`
 
+**If installed globally via npm:**
+
+```json
+{
+  "mcpServers": {
+    "mermaidjs-mcp": {
+      "command": "mermaidjs-mcp",
+      "args": [],
+      "env": {}
+    }
+  }
+}
+```
+
+**If using local installation:**
+
 ```json
 {
   "mcpServers": {
@@ -42,14 +68,14 @@ Add this server to your GitHub Copilot settings. Create or edit your MCP configu
 }
 ```
 
-Or if you installed it globally:
+**If using npx:**
 
 ```json
 {
   "mcpServers": {
     "mermaidjs-mcp": {
-      "command": "mermaidjs-mcp",
-      "args": [],
+      "command": "npx",
+      "args": ["@mermaidjs-mcp/mermaidjs-mcp"],
       "env": {}
     }
   }
